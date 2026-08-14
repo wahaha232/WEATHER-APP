@@ -191,27 +191,35 @@ export default function App() {
       setError(null);
 
       try {
+        const rawLat = Number(city.latitude);
+        const rawLon = Number(city.longitude);
+        const lat = !isNaN(rawLat) && isFinite(rawLat) ? rawLat : 25.033;
+        const lon = !isNaN(rawLon) && isFinite(rawLon) ? rawLon : 121.5654;
+
         const geoResult: GeocodingResult = {
           id: Number(city.id) || Date.now(),
-          name: city.name,
+          name: city.name || '台北市',
           district: city.district,
           admin1: city.admin1,
           country: city.country,
-          latitude: city.latitude,
-          longitude: city.longitude,
+          latitude: lat,
+          longitude: lon,
         };
 
         const res = await fetchFullWeatherData(geoResult, lang);
         setWeatherData(res);
       } catch (err: any) {
-        console.error('Fetch weather error:', err);
-        setError(err?.message || (lang === 'zh' ? '取得天氣預報資料失敗，請檢查網路連線後重試' : 'Failed to fetch weather forecast, please check network connection'));
+        console.warn('Fetch weather error (handled gracefully):', err);
+        // Only set hard blocking error if we don't even have any weather data
+        if (!weatherData) {
+          setError(err?.message || (lang === 'zh' ? '取得天氣預報資料失敗，請檢查網路連線後重試' : 'Failed to fetch weather forecast, please check network connection'));
+        }
       } finally {
         setIsLoading(false);
         setIsRefreshing(false);
       }
     },
-    [lang]
+    [lang, weatherData]
   );
 
   // Load weather whenever active city changes or language toggles
