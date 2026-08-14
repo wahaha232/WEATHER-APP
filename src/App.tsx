@@ -3,8 +3,6 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
-  Smartphone,
-  Languages,
 } from 'lucide-react';
 import {
   FullWeatherResponse,
@@ -391,52 +389,6 @@ export default function App() {
       >
         {/* Android Status Bar */}
         <AndroidStatusBar />
-
-        {/* Top Floating App Banner for Quick Actions */}
-        <header className="px-4 py-2.5 flex items-center justify-between bg-black/25 backdrop-blur-md border-b border-white/10 z-20">
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs font-semibold tracking-wide text-white/90">
-              {t.appTitle}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Refresh Weather Button */}
-            <button
-              id="btn-header-refresh"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/80 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
-              title={lang === 'zh' ? '重新整理天氣' : 'Refresh Weather'}
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-sky-400' : ''}`} />
-            </button>
-
-            {/* Quick 1-Click Language Switch in header */}
-            <button
-              id="btn-header-lang-switch"
-              onClick={handleToggleLanguage}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-white/90 text-xs font-medium transition-all active:scale-95 cursor-pointer"
-              title={lang === 'zh' ? 'Switch to English' : '切換為繁體中文'}
-            >
-              <Languages className="w-3.5 h-3.5 text-sky-300" />
-              <span>{lang === 'zh' ? 'EN' : '繁中'}</span>
-            </button>
-
-            {/* Frame mode quick toggle */}
-            <button
-              id="btn-toggle-frame-mode"
-              onClick={() =>
-                setSettings((s) => ({ ...s, phoneFrameMode: !s.phoneFrameMode }))
-              }
-              className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white/80 transition-colors cursor-pointer"
-              title={settings.phoneFrameMode ? t.toggleWidescreen : t.togglePhoneFrame}
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </header>
 
         {/* Main Content Area */}
         <div className="relative flex-1 overflow-y-auto overflow-x-hidden no-scrollbar bg-slate-900">

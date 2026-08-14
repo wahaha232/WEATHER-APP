@@ -69,36 +69,10 @@ export const CurrentWeatherHero: React.FC<CurrentWeatherHeroProps> = ({
   );
 
   return (
-    <div id="current-weather-hero" className="flex flex-col items-center pt-1 pb-4 px-2 sm:px-4 text-center w-full">
-      {/* Top City Header / Action Bar */}
-      <div className="w-full flex items-center justify-between mb-3 px-1">
-        {/* City Switcher Trigger Button */}
-        <button
-          id="btn-open-city-selector"
-          onClick={onOpenCityDrawer}
-          className="flex items-center gap-2 bg-[#0B2C52]/70 hover:bg-[#0E3868]/90 active:scale-95 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 transition-all text-sm font-medium shadow-md cursor-pointer text-white"
-          title={t.switchCity}
-        >
-          <MapPin className="w-4 h-4 text-amber-300 flex-shrink-0" />
-          <span className="max-w-[160px] sm:max-w-[220px] truncate font-semibold">
-            {city.name}
-          </span>
-          {city.district && city.name !== city.district && (
-            <span className="hidden sm:inline-block text-[10px] text-amber-200 bg-amber-400/20 px-1.5 py-0.5 rounded-full border border-amber-300/30">
-              {city.district}
-            </span>
-          )}
-          {city.country && (
-            <span className="text-xs text-white/70 bg-white/10 px-1.5 py-0.5 rounded">
-              {city.country_code || city.country}
-            </span>
-          )}
-        </button>
-      </div>
-
+    <div id="current-weather-hero" className="flex flex-col items-center pt-2 pb-3 px-1 sm:px-3 text-center w-full">
       {/* City Dots Indicator */}
       {totalSavedCities > 1 && (
-        <div className="flex items-center gap-1.5 mb-2.5">
+        <div className="flex items-center gap-1.5 mb-2">
           {Array.from({ length: totalSavedCities }).map((_, idx) => (
             <div
               key={idx}
@@ -113,11 +87,12 @@ export const CurrentWeatherHero: React.FC<CurrentWeatherHeroProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* ⭐ HERO WEATHER CAPSULE CARD (Exact Archetype from User Reference Image) ⭐ */}
+      {/* ⭐ HERO WEATHER CAPSULE CARD ⭐ */}
       {/* ========================================================================= */}
       <div
         id="hero-weather-main-card"
-        className="w-full relative overflow-hidden rounded-[30px] sm:rounded-[34px] bg-gradient-to-r from-[#0C386D] via-[#092B54] to-[#061C38] border border-white/20 shadow-[0_16px_36px_rgba(5,23,54,0.35)] p-4 sm:p-5 text-white my-1"
+        onClick={onOpenCityDrawer}
+        className="w-full relative overflow-hidden rounded-[30px] sm:rounded-[34px] bg-gradient-to-r from-[#0C386D] via-[#092B54] to-[#061C38] border border-white/20 shadow-[0_16px_36px_rgba(5,23,54,0.35)] p-4 sm:p-5 text-white my-1 cursor-pointer transition-transform active:scale-[0.99]"
       >
         {/* Subtle Background Glow Circle */}
         <div className="absolute -right-8 -bottom-8 w-48 h-48 rounded-full bg-[#1A4B84]/40 blur-2xl pointer-events-none" />
