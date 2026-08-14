@@ -1,0 +1,6 @@
+{
+  "name": "Weather Android App",
+  "description": "A modern Material You styled Android weather app powered by free Open-Meteo API with live forecasts, air quality, hourly radar charts, multi-city management, and exportable Jetpack Compose files.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
