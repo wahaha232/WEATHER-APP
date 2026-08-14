@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">天氣即時通</string>
+    <string name="widget_description">即時氣溫、降雨機率與天氣趨勢桌面小工具</string>
+</resources>

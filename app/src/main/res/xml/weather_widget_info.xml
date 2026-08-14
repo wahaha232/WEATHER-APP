@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+  Android 系統對 updatePeriodMillis 設有 30 分鐘 (1800000 ms) 的硬性下限。
+  任何低於 30 分鐘的數值均會被系統限制強制視為 30 分鐘。
+  若需要更頻繁或自訂頻率的定時更新，建議搭配 WorkManager 的 PeriodicWorkRequest 實現。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:maxResizeWidth="360dp"
+    android:maxResizeHeight="240dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen|keyguard"
+    android:description="@string/widget_description" />
