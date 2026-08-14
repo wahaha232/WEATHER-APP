@@ -18,11 +18,13 @@ import {
   Download,
   Info,
   Flame,
+  Globe,
 } from 'lucide-react';
 import { FullWeatherResponse, SavedCity, WeatherSettings } from '../types';
 import { WeatherIcon } from './WeatherIcon';
 import { WeatherIllustration3D } from './WeatherIllustration3D';
 import { TRANSLATIONS } from '../services/i18n';
+import { formatLocalTime, resolveTimezone, isDaylightSavingTime } from '../services/timeService';
 
 interface WeatherWidgetModalProps {
   isOpen: boolean;
@@ -35,7 +37,7 @@ interface WeatherWidgetModalProps {
   onRefreshWeather: () => void;
 }
 
-type WidgetSize = '4x2' | '4x1' | '2x2' | 'lockscreen';
+type WidgetSize = '4x2' | '4x1' | '2x2' | 'dual_clock' | 'lockscreen';
 type WidgetTheme = 'glass' | 'dark' | 'sky' | 'minimal';
 
 export const WeatherWidgetModal: React.FC<WeatherWidgetModalProps> = ({
@@ -61,7 +63,7 @@ export const WeatherWidgetModal: React.FC<WeatherWidgetModalProps> = ({
   const lang = settings.language || 'zh';
   const t = TRANSLATIONS[lang];
 
-  // Live digital clock tick for preview
+  // Update clock every second
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -89,13 +91,28 @@ export const WeatherWidgetModal: React.FC<WeatherWidgetModalProps> = ({
       : weatherData.daily.temperatureMin[0]
   );
 
-  const formattedHours = currentTime.getHours().toString().padStart(2, '0');
-  const formattedMinutes = currentTime.getMinutes().toString().padStart(2, '0');
-  const formattedDate = currentTime.toLocaleDateString(lang === 'zh' ? 'zh-TW' : 'en-US', {
-    month: 'short',
-    day: 'numeric',
-    weekday: 'short',
-  });
+  // Time & DST for primary city
+  const primaryTz = resolveTimezone(activeCity.timezone, activeCity.latitude, activeCity.longitude);
+  const primaryTimeFormatted = formatLocalTime(
+    currentTime,
+    primaryTz,
+    settings.timeFormat === '12h',
+    lang
+  );
+  const isPrimaryDst = isDaylightSavingTime(currentTime, primaryTz);
+
+  // Time & DST for optional secondary city
+  const secondaryCity = savedCities.find(
+    (c) => String(c.id) === String(settings.secondaryCityId) && String(c.id) !== String(activeCity.id)
+  ) || savedCities.find((c) => String(c.id) !== String(activeCity.id));
+
+  const secondaryTz = secondaryCity
+    ? resolveTimezone(secondaryCity.timezone, secondaryCity.latitude, secondaryCity.longitude)
+    : undefined;
+  const secondaryTimeFormatted = secondaryTz
+    ? formatLocalTime(currentTime, secondaryTz, settings.timeFormat === '12h', lang)
+    : null;
+  const isSecondaryDst = secondaryTz ? isDaylightSavingTime(currentTime, secondaryTz) : false;
 
   // Background style helper
   const getWidgetBgClass = () => {
@@ -134,86 +151,33 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.weather.precision.MainActivity
 import com.weather.precision.R
+import java.time.ZonedDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
- * 4x2 & 4x1 Android Jetpack Glance Weather Widget
- * 自動根據設定 (每 ${settings.autoRefreshIntervalMinutes || 15} 分鐘) 於背景排程更新
+ * 4x2, 4x1 & Dual Clock Android Jetpack Glance Weather Widget
+ * 自動支援 12/24 小時制 (${settings.timeFormat || '24h'}) 與日光節約時間 (DST)
  */
 class PrecisionWeatherWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        // 從資料庫或 SharedPreferences 讀取最新快取氣象
         val cityName = "${activeCity.name}"
         val temp = "${temp}${tempUnit}"
-        val condition = "${current.weatherLabel}"
+        val condition = "${current.weatherCode}"
         val highLow = "H: ${highTemp}° / L: ${lowTemp}°"
+        val timeFormat = "${settings.timeFormat || '24h'}"
+        val timezoneId = "${primaryTz}"
 
         provideContent {
             GlanceTheme {
                 WeatherWidgetContent(
                     cityName = cityName,
                     temp = temp,
-                    condition = condition,
                     highLow = highLow,
+                    timezoneId = timezoneId,
+                    timeFormat = timeFormat,
                     context = context
-                )
-            }
-        }
-    }
-
-    @Composable
-    private fun WeatherWidgetContent(
-        cityName: String,
-        temp: String,
-        condition: String,
-        highLow: String,
-        context: Context
-    ) {
-        Column(
-            modifier = GlanceModifier
-                .fillMaxSize()
-                .background(R.drawable.widget_glass_background)
-                .padding(16.dp)
-                .clickable(actionStartActivity<MainActivity>()),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalAlignment = Alignment.Start
-        ) {
-            Row(
-                modifier = GlanceModifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = GlanceModifier.defaultWeight()) {
-                    Text(
-                        text = cityName,
-                        style = TextStyle(
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                    Text(
-                        text = highLow,
-                        style = TextStyle(fontSize = 12.sp)
-                    )
-                }
-                Text(
-                    text = temp,
-                    style = TextStyle(
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-            }
-
-            Spacer(modifier = GlanceModifier.height(8.dp))
-
-            Row(
-                modifier = GlanceModifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = condition,
-                    style = TextStyle(fontSize = 13.sp)
                 )
             }
         }
@@ -254,8 +218,8 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
               </h2>
               <p className="text-xs text-white/50">
                 {lang === 'zh'
-                  ? '自訂 4x2、4x1、2x2 及鎖定螢幕小工具，即時同步更新'
-                  : 'Customize 4x2, 4x1, 2x2 & lock screen widgets'}
+                  ? '自訂 4x2、4x1、2x2、雙時區時鐘及鎖定螢幕小工具，即時同步更新'
+                  : 'Customize 4x2, 4x1, 2x2, Dual-Clock & lock screen widgets'}
               </p>
             </div>
           </div>
@@ -319,52 +283,52 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
                   <Sliders className="w-3.5 h-3.5 text-sky-400" />
                   <span>{lang === 'zh' ? '選擇小工具尺寸規格' : 'Select Widget Layout Size'}</span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-5 gap-2">
                   {[
-                    { id: '4x2', label: '4x2 全能大圖示', desc: '含逐時與詳細指標' },
-                    { id: '4x1', label: '4x1 經典橫向列', desc: '輕薄時鐘與當前氣溫' },
-                    { id: '2x2', label: '2x2 正方形方塊', desc: '緊湊大字體設計' },
-                    { id: 'lockscreen', label: '鎖定螢幕膠囊', desc: '極簡 Glance Style' },
+                    { id: '4x2', label: '4x2 大卡片' },
+                    { id: '4x1', label: '4x1 長條' },
+                    { id: '2x2', label: '2x2 正方' },
+                    { id: 'dual_clock', label: '雙時區時鐘' },
+                    { id: 'lockscreen', label: '鎖定螢幕' },
                   ].map((s) => (
                     <button
                       key={s.id}
                       id={`btn-widget-size-${s.id}`}
                       onClick={() => setSelectedSize(s.id as WidgetSize)}
-                      className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                      className={`py-2 px-1 text-center rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                         selectedSize === s.id
-                          ? 'bg-sky-500/20 border-sky-400 text-white shadow-sm ring-1 ring-sky-400'
-                          : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+                          ? 'bg-sky-500 text-white border-sky-400 shadow-md font-bold'
+                          : 'bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white'
                       }`}
                     >
-                      <div className="text-xs font-bold text-sky-300">{s.id.toUpperCase()}</div>
-                      <div className="text-[11px] font-medium text-white/90 truncate">{s.label}</div>
-                      <div className="text-[10px] text-white/50 truncate">{s.desc}</div>
+                      {s.label}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Theme & Display Options */}
+              {/* Theme & Controls Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Theme Selector */}
-                <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
-                  <div className="text-xs font-semibold text-white/80 mb-2">
-                    {lang === 'zh' ? '小工具材質樣式' : 'Widget Material Style'}
+                <div className="bg-white/5 p-3 rounded-2xl border border-white/10 space-y-2">
+                  <div className="text-xs font-medium text-white/70 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{lang === 'zh' ? '外觀風格主題' : 'Widget Visual Style'}</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-1.5">
+                  <div className="grid grid-cols-4 gap-1.5 text-xs">
                     {[
-                      { id: 'glass', label: '毛玻璃 (Glass)' },
-                      { id: 'dark', label: '深邃黑 (OLED)' },
-                      { id: 'sky', label: '動態天空 (Sky)' },
-                      { id: 'minimal', label: '極簡透明 (Clean)' },
+                      { id: 'glass', label: '毛玻璃' },
+                      { id: 'dark', label: '極致黑' },
+                      { id: 'sky', label: '天空藍' },
+                      { id: 'minimal', label: '極簡透' },
                     ].map((th) => (
                       <button
                         key={th.id}
                         id={`btn-widget-theme-${th.id}`}
                         onClick={() => setWidgetTheme(th.id as WidgetTheme)}
-                        className={`py-1.5 px-2 rounded-xl text-xs border text-center transition-all cursor-pointer ${
+                        className={`py-1.5 rounded-lg text-center font-medium border transition-all cursor-pointer ${
                           widgetTheme === th.id
-                            ? 'bg-sky-500 text-white border-sky-400 font-semibold'
+                            ? 'bg-sky-500 text-white border-sky-400 font-bold'
                             : 'bg-white/5 text-white/60 border-white/10 hover:bg-white/10'
                         }`}
                       >
@@ -374,9 +338,9 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
                   </div>
                 </div>
 
-                {/* City & Toggles */}
+                {/* Toggles */}
                 <div className="bg-white/5 p-3 rounded-2xl border border-white/10 space-y-2">
-                  <div className="text-xs font-semibold text-white/80">
+                  <div className="text-xs font-medium text-white/70">
                     {lang === 'zh' ? '資訊顯示開關' : 'Widget Info Toggles'}
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -426,7 +390,12 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
                 <div className="flex items-center justify-between text-[11px] text-white/60 mb-4 px-2">
                   <div className="flex items-center gap-1.5 font-mono">
                     <Clock className="w-3 h-3 text-sky-400" />
-                    <span>{formattedHours}:{formattedMinutes}</span>
+                    <span>{primaryTimeFormatted.timeString}</span>
+                    {isPrimaryDst && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        DST
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full">
@@ -448,16 +417,43 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
                   {selectedSize === '4x2' && (
                     <div
                       id="widget-preview-4x2"
-                      className={`w-full rounded-3xl p-4 sm:p-5 transition-all duration-300 ${getWidgetBgClass()}`}
+                      className={`w-full rounded-3xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden ${getWidgetBgClass()}`}
                     >
-                      <div className="flex items-start justify-between">
+                      {/* Widget Top-Right Manual Refresh Action */}
+                      <button
+                        id="btn-widget-manual-refresh-4x2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRefreshWeather();
+                        }}
+                        title={lang === 'zh' ? '手動更新天氣與時間' : 'Manual Refresh'}
+                        className="absolute top-3.5 right-3.5 p-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 text-white/80 hover:text-white transition-all cursor-pointer z-10"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 active:rotate-180 transition-transform" />
+                      </button>
+
+                      <div className="flex items-start justify-between pr-8">
                         <div>
                           {showTime && (
-                            <div className="text-[11px] text-white/70 font-medium tracking-wide">
-                              {formattedDate} • {formattedHours}:{formattedMinutes}
+                            <div className="text-[11px] text-white/80 font-medium tracking-wide flex flex-wrap items-center gap-1.5 mb-0.5">
+                              {/* YYYY/MM/DD + Weekday + Week Number */}
+                              <span className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-[10px] text-sky-200">
+                                {primaryTimeFormatted.dateYMD} ({primaryTimeFormatted.weekdayString})
+                              </span>
+                              <span className="text-[10px] text-amber-300 font-semibold bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30">
+                                {primaryTimeFormatted.weekNumberString}
+                              </span>
+                              <span className="font-mono font-bold text-white text-xs ml-0.5">
+                                {primaryTimeFormatted.timeString}
+                              </span>
+                              {isPrimaryDst && (
+                                <span className="text-[9px] px-1 rounded bg-amber-400/25 text-amber-200 border border-amber-300/30">
+                                  DST
+                                </span>
+                              )}
                             </div>
                           )}
-                          <h3 className="text-lg sm:text-xl font-bold tracking-tight mt-0.5 flex items-center gap-1.5">
+                          <h3 className="text-lg sm:text-xl font-bold tracking-tight mt-1 flex items-center gap-1.5">
                             <span>{activeCity.name}</span>
                             {activeCity.isGps && (
                               <span className="text-[9px] bg-sky-500/30 text-sky-300 border border-sky-400/40 px-1.5 py-0.2 rounded-full font-normal">
@@ -465,7 +461,7 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
                               </span>
                             )}
                           </h3>
-                          <div className="flex items-center gap-2 mt-1 text-xs text-white/75 font-medium">
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-white/75 font-medium">
                             <span>{current.weatherLabel}</span>
                             <span>•</span>
                             <span>{highTemp}° / {lowTemp}°</span>
@@ -494,7 +490,7 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
                       </div>
 
                       {/* Mini Hourly Strip inside 4x2 Widget */}
-                      <div className="mt-3.5 pt-3 border-t border-white/10 flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
+                      <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
                         {weatherData.hourly.time.slice(0, 5).map((timeStr, idx) => {
                           const hour = new Date(timeStr).getHours();
                           const hTemp = Math.round(
@@ -532,34 +528,55 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
                   {selectedSize === '4x1' && (
                     <div
                       id="widget-preview-4x1"
-                      className={`w-full rounded-2xl px-4 py-3 flex items-center justify-between transition-all duration-300 ${getWidgetBgClass()}`}
+                      className={`w-full rounded-2xl px-4 py-3 flex items-center justify-between transition-all duration-300 relative ${getWidgetBgClass()}`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 pr-2">
                         <WeatherIcon
                           code={current.weatherCode}
                           isDay={current.isDay}
-                          className="w-9 h-9 text-amber-300"
+                          className="w-9 h-9 text-amber-300 flex-shrink-0"
                         />
                         <div>
                           <div className="text-sm font-bold flex items-center gap-1.5">
                             <span>{activeCity.name}</span>
                             <span className="text-xs font-normal text-white/60">• {current.weatherLabel}</span>
                           </div>
-                          <div className="text-[11px] text-white/60">
-                            {showTime ? `${formattedHours}:${formattedMinutes} • ` : ''}
-                            {highTemp}° / {lowTemp}°
-                            {showPrecipitation ? ` • 降雨 ${current.precipitation}%` : ''}
+                          <div className="text-[11px] text-white/70 flex flex-wrap items-center gap-1.5 mt-0.5">
+                            {showTime && (
+                              <>
+                                <span className="font-mono">{primaryTimeFormatted.dateYMD} {primaryTimeFormatted.weekdayString}</span>
+                                <span className="text-amber-300 font-semibold">({primaryTimeFormatted.weekNumberString})</span>
+                                <span className="font-mono font-bold text-sky-200">{primaryTimeFormatted.timeString}</span>
+                                <span>•</span>
+                              </>
+                            )}
+                            <span>{highTemp}° / {lowTemp}°</span>
+                            {showPrecipitation && <span>• 降雨 {current.precipitation}%</span>}
                           </div>
                         </div>
                       </div>
 
-                      <div className="text-right">
-                        <div className="text-2xl font-black">{temp}{tempUnit}</div>
-                        {showAqi && weatherData.airQuality && (
-                          <div className="text-[9px] text-emerald-300 font-semibold">
-                            AQI {weatherData.airQuality.usAqi}
-                          </div>
-                        )}
+                      <div className="flex items-center gap-2.5">
+                        <div className="text-right">
+                          <div className="text-2xl font-black">{temp}{tempUnit}</div>
+                          {showAqi && weatherData.airQuality && (
+                            <div className="text-[9px] text-emerald-300 font-semibold">
+                              AQI {weatherData.airQuality.usAqi}
+                            </div>
+                          )}
+                        </div>
+                        {/* Top-Right Manual Refresh Icon */}
+                        <button
+                          id="btn-widget-manual-refresh-4x1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRefreshWeather();
+                          }}
+                          title={lang === 'zh' ? '手動更新' : 'Refresh'}
+                          className="p-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 text-white/80 hover:text-white transition-all cursor-pointer"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   )}
@@ -568,9 +585,22 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
                   {selectedSize === '2x2' && (
                     <div
                       id="widget-preview-2x2"
-                      className={`w-48 h-48 rounded-3xl p-4 flex flex-col justify-between transition-all duration-300 ${getWidgetBgClass()}`}
+                      className={`w-52 h-52 rounded-3xl p-4 flex flex-col justify-between transition-all duration-300 relative ${getWidgetBgClass()}`}
                     >
-                      <div className="flex items-start justify-between">
+                      {/* Top Right Refresh Icon */}
+                      <button
+                        id="btn-widget-manual-refresh-2x2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRefreshWeather();
+                        }}
+                        title={lang === 'zh' ? '手動更新' : 'Refresh'}
+                        className="absolute top-3 right-3 p-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 text-white/80 hover:text-white transition-all cursor-pointer z-10"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                      </button>
+
+                      <div className="flex items-start justify-between pr-6">
                         <div>
                           <h4 className="text-sm font-bold truncate max-w-[90px]">{activeCity.name}</h4>
                           <span className="text-[10px] text-white/60">{current.weatherLabel}</span>
@@ -584,9 +614,17 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
 
                       <div className="my-1">
                         <div className="text-3xl font-extrabold">{temp}{tempUnit}</div>
-                        <div className="text-[10px] text-white/70">
-                          {highTemp}° / {lowTemp}°
-                        </div>
+                        {showTime && (
+                          <div className="text-[10px] text-white/80 mt-0.5 space-y-0.5">
+                            <div className="font-mono text-sky-200">
+                              {primaryTimeFormatted.dateYMD} {primaryTimeFormatted.weekdayString}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-amber-300 font-medium">{primaryTimeFormatted.weekNumberString}</span>
+                              <span className="font-bold">{primaryTimeFormatted.timeString}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-between text-[10px] text-white/60 pt-1.5 border-t border-white/10">
@@ -596,26 +634,117 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
                     </div>
                   )}
 
-                  {/* 4. Lock Screen Widget */}
+                  {/* 4. Dual-Clock Multi-Timezone Widget */}
+                  {selectedSize === 'dual_clock' && (
+                    <div
+                      id="widget-preview-dual-clock"
+                      className={`w-full rounded-3xl p-4 sm:p-5 transition-all duration-300 relative ${getWidgetBgClass()}`}
+                    >
+                      {/* Top Right Refresh Icon */}
+                      <button
+                        id="btn-widget-manual-refresh-dual"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRefreshWeather();
+                        }}
+                        title={lang === 'zh' ? '手動更新' : 'Refresh'}
+                        className="absolute top-3.5 right-3.5 p-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 text-white/80 hover:text-white transition-all cursor-pointer z-10"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      </button>
+
+                      <div className="text-xs font-semibold text-white/80 mb-2 flex items-center gap-1.5 pr-8">
+                        <Globe className="w-4 h-4 text-sky-400" />
+                        <span>{lang === 'zh' ? '雙時區時鐘 & 當地天氣' : 'Dual-Clock & World Weather'}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        {/* Clock 1: Primary City */}
+                        <div className="bg-white/10 p-3 rounded-2xl border border-white/10 flex flex-col justify-between">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-sky-300 truncate">{activeCity.name}</span>
+                            {isPrimaryDst && (
+                              <span className="text-[8px] px-1 rounded bg-amber-400/25 text-amber-200">DST</span>
+                            )}
+                          </div>
+                          <div className="text-2xl sm:text-3xl font-extrabold font-mono text-white my-1">
+                            {primaryTimeFormatted.timeString}
+                          </div>
+                          <div className="text-[10px] text-white/70 space-y-0.5">
+                            <div className="font-mono text-sky-200">
+                              {primaryTimeFormatted.dateYMD} ({primaryTimeFormatted.weekdayString})
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-amber-300 font-medium">{primaryTimeFormatted.weekNumberString}</span>
+                              <span className="font-bold text-white/90">{temp}{tempUnit}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Clock 2: Secondary City */}
+                        <div className="bg-white/10 p-3 rounded-2xl border border-white/10 flex flex-col justify-between">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-amber-300 truncate">
+                              {secondaryCity?.name || (lang === 'zh' ? '第 2 地 (未設定)' : 'Secondary')}
+                            </span>
+                            {isSecondaryDst && (
+                              <span className="text-[8px] px-1 rounded bg-amber-400/25 text-amber-200">DST</span>
+                            )}
+                          </div>
+                          <div className="text-2xl sm:text-3xl font-extrabold font-mono text-white my-1">
+                            {secondaryTimeFormatted ? secondaryTimeFormatted.timeString : '--:--'}
+                          </div>
+                          <div className="text-[10px] text-white/70 space-y-0.5">
+                            <div className="font-mono text-amber-200">
+                              {secondaryTimeFormatted ? `${secondaryTimeFormatted.dateYMD} (${secondaryTimeFormatted.weekdayString})` : '請在設定選取'}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-amber-300 font-medium">
+                                {secondaryTimeFormatted ? secondaryTimeFormatted.weekNumberString : ''}
+                              </span>
+                              <span className="text-white/50">{secondaryCity?.timezone ? '時區同步' : ''}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 5. Lock Screen Widget */}
                   {selectedSize === 'lockscreen' && (
                     <div
                       id="widget-preview-lockscreen"
-                      className="w-full max-w-sm rounded-full bg-black/60 backdrop-blur-xl border border-white/20 px-4 py-2 flex items-center justify-between text-white shadow-xl"
+                      className="w-full max-w-md rounded-full bg-black/60 backdrop-blur-xl border border-white/20 px-4 py-2 flex items-center justify-between text-white shadow-xl relative"
                     >
                       <div className="flex items-center gap-2">
                         <WeatherIcon
                           code={current.weatherCode}
                           isDay={current.isDay}
-                          className="w-5 h-5 text-amber-300"
+                          className="w-5 h-5 text-amber-300 flex-shrink-0"
                         />
-                        <span className="text-xs font-semibold">{activeCity.name}</span>
-                        <span className="text-xs text-white/60">{current.weatherLabel}</span>
+                        <div className="flex flex-col text-left">
+                          <span className="text-xs font-semibold">{activeCity.name}</span>
+                          <span className="text-[10px] text-white/60 font-mono">
+                            {primaryTimeFormatted.dateYMD} {primaryTimeFormatted.weekdayString} • {primaryTimeFormatted.weekNumberString}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
                         <span className="text-sm font-bold">{temp}{tempUnit}</span>
-                        <span className="text-[10px] text-white/50 font-mono">
-                          {formattedHours}:{formattedMinutes}
+                        <span className="text-[11px] text-sky-200 font-mono font-bold">
+                          {primaryTimeFormatted.timeString}
                         </span>
+                        <button
+                          id="btn-widget-manual-refresh-lock"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRefreshWeather();
+                          }}
+                          title={lang === 'zh' ? '手動更新' : 'Refresh'}
+                          className="p-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 text-white/80 hover:text-white transition-all cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                        </button>
                       </div>
                     </div>
                   )}
@@ -649,88 +778,43 @@ class PrecisionWeatherWidgetReceiver : GlanceAppWidgetReceiver() {
             <div className="space-y-3">
               <div className="flex items-center justify-between bg-white/5 p-3 rounded-2xl border border-white/10">
                 <div>
-                  <div className="text-xs font-bold text-emerald-300">
-                    Android 14+ Jetpack Glance AppWidget
+                  <div className="text-xs font-semibold text-white">
+                    Android Jetpack Glance 1.1+ (Kotlin / Compose)
                   </div>
-                  <div className="text-[11px] text-white/60">
-                    {lang === 'zh'
-                      ? '使用現代 Compose 語法構建的輕量級高效能 Android 桌面小工具'
-                      : 'Modern Compose declarative syntax for Android home screen widget'}
+                  <div className="text-[11px] text-white/50">
+                    PrecisionWeatherWidget.kt • 支援 12/24H 與自動 DST
                   </div>
                 </div>
                 <button
-                  id="btn-copy-widget-code"
                   onClick={handleCopyCode}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-zinc-950 font-bold text-xs transition-all shadow cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition-all shadow cursor-pointer"
                 >
-                  {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedCode ? (lang === 'zh' ? '已複製！' : 'Copied!') : (lang === 'zh' ? '複製程式碼' : 'Copy Code')}</span>
+                  {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  <span>{copiedCode ? '已複製！' : '複製程式碼'}</span>
                 </button>
               </div>
 
-              <div className="relative bg-zinc-950 rounded-2xl p-3 border border-white/10 overflow-x-auto text-xs font-mono text-emerald-400 max-h-72">
-                <pre className="leading-relaxed whitespace-pre">{kotlinGlanceCode}</pre>
-              </div>
+              <pre className="p-4 rounded-2xl bg-black/80 border border-white/15 text-[11px] font-mono text-emerald-300 overflow-x-auto max-h-[360px] leading-relaxed">
+                <code>{kotlinGlanceCode}</code>
+              </pre>
             </div>
           ) : (
-            /* Guide View */
-            <div className="space-y-3 text-xs text-white/80 leading-relaxed">
-              <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                <h4 className="font-bold text-white text-sm mb-1.5 flex items-center gap-2">
+            /* Pin to Home Guide */
+            <div className="space-y-3">
+              <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3 text-xs leading-relaxed text-white/80">
+                <h4 className="font-semibold text-white text-sm flex items-center gap-2">
                   <Smartphone className="w-4 h-4 text-sky-400" />
-                  <span>{lang === 'zh' ? '如何在 Android 手機上新增天氣小工具？' : 'How to add Widget on Android'}</span>
+                  <span>如何在 Android 手機桌面新增天氣小工具？</span>
                 </h4>
-                <ol className="list-decimal list-inside space-y-2 text-white/70 mt-2">
-                  <li>
-                    {lang === 'zh'
-                      ? '長按 Android 手機主畫面任何空白處。'
-                      : 'Long-press any empty space on your Android home screen.'}
-                  </li>
-                  <li>
-                    {lang === 'zh'
-                      ? '點擊彈出的「小工具 (Widgets)」選單。'
-                      : 'Tap "Widgets" from the menu that appears.'}
-                  </li>
-                  <li>
-                    {lang === 'zh'
-                      ? '向下滾動找到「極簡精準天氣 (Precision Weather)」。'
-                      : 'Scroll down and find "Precision Weather".'}
-                  </li>
-                  <li>
-                    {lang === 'zh'
-                      ? '選擇 4x2 或 4x1 尺寸並按住拖曳至您喜歡的主畫面位置即可！'
-                      : 'Choose 4x2 or 4x1 and drag it to your preferred position!'}
-                  </li>
+                <ol className="list-decimal list-inside space-y-2 text-white/70">
+                  <li>在手機主螢幕任何空白區域「長按」1 秒。</li>
+                  <li>在底部彈出的選單中點選「微件 (Widgets)」或「小工具」。</li>
+                  <li>在列表中找到「精準天氣」或本氣象應用程式。</li>
+                  <li>按住喜愛的小工具尺寸（4x2、4x1、2x2、雙時區時鐘），拖曳至桌面即可。</li>
                 </ol>
-              </div>
-
-              <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
-                <h4 className="font-bold text-white text-sm mb-1.5 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-amber-400" />
-                  <span>{lang === 'zh' ? '自動更新週期 (Auto-Update)' : 'Auto-Update Interval'}</span>
-                </h4>
-                <p className="text-white/70">
-                  {lang === 'zh'
-                    ? `小工具已自動與您在設定中選擇的「每 ${settings.autoRefreshIntervalMinutes || 15} 分鐘」排程同步。Android WorkManager 將在後台精確維持省電與資料即時性。`
-                    : `Widgets automatically synchronize with your selected ${settings.autoRefreshIntervalMinutes || 15}-minute interval via Android WorkManager.`}
-                </p>
               </div>
             </div>
           )}
-        </div>
-
-        {/* Footer Close / Action */}
-        <div className="pt-3 border-t border-white/10 flex items-center justify-between gap-2">
-          <div className="text-[11px] text-white/50">
-            {lang === 'zh' ? '已自動儲存偏好樣式' : 'Preferences auto-saved'}
-          </div>
-          <button
-            id="btn-confirm-widget-modal"
-            onClick={onClose}
-            className="px-5 py-2 rounded-2xl bg-sky-500 hover:bg-sky-400 active:scale-95 text-white font-semibold text-xs shadow-md transition-all cursor-pointer"
-          >
-            {t.finishSettings || '完成'}
-          </button>
         </div>
       </div>
     </div>

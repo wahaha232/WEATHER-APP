@@ -18,6 +18,7 @@ export interface CurrentWeatherData {
   temperature: number;
   relativeHumidity: number;
   apparentTemperature: number;
+  dewPoint?: number;
   isDay: number;
   precipitation: number;
   rain: number;
@@ -36,13 +37,16 @@ export interface HourlyWeatherData {
   time: string[];
   temperature: number[];
   relativeHumidity: number[];
+  dewPoint?: number[];
   apparentTemperature: number[];
   precipitationProbability: number[];
   precipitation: number[];
+  snowfallProbability?: number[];
   weatherCode: number[];
   surfacePressure: number[];
   visibility: number[];
   windSpeed: number[];
+  windDirection?: number[];
   uvIndex: number[];
 }
 
@@ -58,7 +62,9 @@ export interface DailyWeatherData {
   uvIndexMax: number[];
   precipitationSum: number[];
   precipitationProbabilityMax: number[];
+  precipitationProbabilityNight?: number[];
   windSpeedMax: number[];
+  windDirectionDominant?: number[];
 }
 
 export interface AirQualityData {
@@ -102,7 +108,10 @@ export interface SavedCity {
   latitude: number;
   longitude: number;
   isGps?: boolean;
+  timezone?: string;
 }
+
+export type AppTheme = 'dark' | 'light' | 'system';
 
 export interface WeatherSettings {
   tempUnit: 'celsius' | 'fahrenheit';
@@ -111,4 +120,7 @@ export interface WeatherSettings {
   phoneFrameMode: boolean;
   autoRefreshIntervalMinutes: number;
   language: 'zh' | 'en';
+  timeFormat: '12h' | '24h';
+  secondaryCityId?: string; // ID of optional 2nd location for dual-clock
+  theme?: AppTheme; // 'dark' | 'light' | 'system'
 }

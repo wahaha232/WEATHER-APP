@@ -12,6 +12,7 @@ interface AndroidNavBarProps {
   onTabChange: (tab: 'weather' | 'cities' | 'search' | 'settings') => void;
   onOpenSearch: () => void;
   lang?: AppLanguage;
+  theme?: 'dark' | 'light';
 }
 
 export const AndroidNavBar: React.FC<AndroidNavBarProps> = ({
@@ -19,13 +20,19 @@ export const AndroidNavBar: React.FC<AndroidNavBarProps> = ({
   onTabChange,
   onOpenSearch,
   lang = 'zh',
+  theme = 'dark',
 }) => {
   const t = TRANSLATIONS[lang];
+  const isLight = theme === 'light';
 
   return (
     <div
       id="android-bottom-nav-bar"
-      className="w-full bg-zinc-950/80 backdrop-blur-xl border-t border-white/10 px-2 py-2 flex items-center justify-around text-white select-none z-30"
+      className={`w-full backdrop-blur-xl border-t px-2 py-2 flex items-center justify-around select-none z-30 transition-colors ${
+        isLight
+          ? 'bg-white/90 border-slate-200/80 text-slate-800'
+          : 'bg-zinc-950/80 border-white/10 text-white'
+      }`}
     >
       {/* Tab 1: Weather Live */}
       <button
@@ -33,7 +40,9 @@ export const AndroidNavBar: React.FC<AndroidNavBarProps> = ({
         onClick={() => onTabChange('weather')}
         className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all cursor-pointer ${
           currentTab === 'weather'
-            ? 'text-sky-400 font-semibold'
+            ? 'text-sky-500 font-semibold'
+            : isLight
+            ? 'text-slate-500 hover:text-slate-900'
             : 'text-white/50 hover:text-white/80'
         }`}
       >
@@ -53,7 +62,9 @@ export const AndroidNavBar: React.FC<AndroidNavBarProps> = ({
         onClick={() => onTabChange('cities')}
         className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all cursor-pointer ${
           currentTab === 'cities'
-            ? 'text-sky-400 font-semibold'
+            ? 'text-sky-500 font-semibold'
+            : isLight
+            ? 'text-slate-500 hover:text-slate-900'
             : 'text-white/50 hover:text-white/80'
         }`}
       >
@@ -76,7 +87,9 @@ export const AndroidNavBar: React.FC<AndroidNavBarProps> = ({
         }}
         className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all cursor-pointer ${
           currentTab === 'search'
-            ? 'text-sky-400 font-semibold'
+            ? 'text-sky-500 font-semibold'
+            : isLight
+            ? 'text-slate-500 hover:text-slate-900'
             : 'text-white/50 hover:text-white/80'
         }`}
       >
@@ -96,7 +109,9 @@ export const AndroidNavBar: React.FC<AndroidNavBarProps> = ({
         onClick={() => onTabChange('settings')}
         className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all cursor-pointer ${
           currentTab === 'settings'
-            ? 'text-sky-400 font-semibold'
+            ? 'text-sky-500 font-semibold'
+            : isLight
+            ? 'text-slate-500 hover:text-slate-900'
             : 'text-white/50 hover:text-white/80'
         }`}
       >

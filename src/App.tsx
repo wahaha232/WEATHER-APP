@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Loader2,
   AlertCircle,
@@ -17,10 +17,18 @@ import {
 } from './services/weatherService';
 import { TRANSLATIONS } from './services/i18n';
 import { WeatherAtmosphere } from './components/WeatherAtmosphere';
+import { WeatherAppHeader } from './components/WeatherAppHeader';
 import { CurrentWeatherHero } from './components/CurrentWeatherHero';
 import { HourlyForecastCard } from './components/HourlyForecastCard';
 import { DailyForecastCard } from './components/DailyForecastCard';
-import { WeatherMetricsGrid } from './components/WeatherMetricsGrid';
+import { WindTrendCard } from './components/WindTrendCard';
+import { TodayDetailsGrid } from './components/TodayDetailsGrid';
+import { WindPressureCard } from './components/WindPressureCard';
+import { AqiDetailsCard } from './components/AqiDetailsCard';
+import { AllergensCard } from './components/AllergensCard';
+import { PhotographyCard } from './components/PhotographyCard';
+import { RadarMapCard } from './components/RadarMapCard';
+import { SunMoonCycleCard } from './components/SunMoonCycleCard';
 import { CitySearchModal } from './components/CitySearchModal';
 import { CityManagerDrawer } from './components/CityManagerDrawer';
 import { AndroidProjectExportModal } from './components/AndroidProjectExportModal';
@@ -30,6 +38,7 @@ import { AndroidStatusBar } from './components/AndroidStatusBar';
 import { AndroidNavBar } from './components/AndroidNavBar';
 import { GoogleAdSlot } from './components/GoogleAdSlot';
 import { LocationPermissionDialog } from './components/LocationPermissionDialog';
+import { AppRatingModal } from './components/AppRatingModal';
 
 const STORAGE_KEY_CITIES = 'weather_app_saved_cities_v2';
 const STORAGE_KEY_SETTINGS = 'weather_app_settings_v2';
@@ -73,6 +82,8 @@ const DEFAULT_SETTINGS: WeatherSettings = {
   phoneFrameMode: true,
   autoRefreshIntervalMinutes: 30,
   language: 'zh',
+  timeFormat: '24h',
+  theme: 'dark',
 };
 
 export default function App() {
@@ -86,6 +97,28 @@ export default function App() {
     }
     return DEFAULT_SETTINGS;
   });
+
+  // System Theme Preference Detection for 'system' / '裝置' option
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  const isEffectiveDark = useMemo(() => {
+    if (settings.theme === 'light') return false;
+    if (settings.theme === 'dark') return true;
+    return systemPrefersDark;
+  }, [settings.theme, systemPrefersDark]);
 
   const lang = settings.language || 'zh';
   const t = TRANSLATIONS[lang];
@@ -127,17 +160,31 @@ export default function App() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showLocationPermissionDialog, setShowLocationPermissionDialog] = useState(false);
+  const [showRatingPrompt, setShowRatingPrompt] = useState(false);
 
-  // Check if first launch needs location permission prompt
+  // Check if first launch needs location permission prompt or app rating prompt
   useEffect(() => {
     try {
       const alreadyPrompted = localStorage.getItem(STORAGE_KEY_PERMISSION_PROMPTED);
       if (!alreadyPrompted) {
         // First install/launch: prompt user for device location permission
         setShowLocationPermissionDialog(true);
+      } else {
+        // Check if user should be prompted for App Rating
+        const alreadyRated = localStorage.getItem('precision_weather_rated');
+        const lastDismissed = localStorage.getItem('precision_weather_rating_prompt_dismissed');
+        const oneDayMs = 24 * 60 * 60 * 1000;
+        
+        // Show rating prompt if not rated and not dismissed in the last 24h
+        if (!alreadyRated && (!lastDismissed || Date.now() - parseInt(lastDismissed, 10) > oneDayMs)) {
+          const ratingTimer = setTimeout(() => {
+            setShowRatingPrompt(true);
+          }, 1200);
+          return () => clearTimeout(ratingTimer);
+        }
       }
     } catch (e) {
-      console.warn('Failed checking permission prompted state', e);
+      console.warn('Failed checking permission or rating prompted state', e);
     }
   }, []);
 
@@ -376,22 +423,36 @@ export default function App() {
   return (
     <div
       id="weather-app-root"
-      className="min-h-screen w-full bg-zinc-950 flex items-center justify-center p-0 sm:p-4 md:p-6 select-none font-sans text-white overflow-x-hidden"
+      className={`min-h-screen w-full flex items-center justify-center p-0 sm:p-4 md:p-6 select-none font-sans overflow-x-hidden transition-colors duration-300 ${
+        isEffectiveDark ? 'bg-zinc-950 text-white' : 'bg-slate-200/90 text-slate-900'
+      }`}
     >
       {/* Phone Frame Container or Full Screen Shell */}
       <div
         id="phone-frame-wrapper"
         className={`relative w-full transition-all duration-300 flex flex-col ${
           settings.phoneFrameMode
-            ? 'max-w-md h-[100dvh] sm:h-[880px] sm:max-h-[92vh] sm:rounded-[44px] sm:border-[8px] sm:border-zinc-800 shadow-[0_25px_70px_rgba(0,0,0,0.8)] sm:ring-1 sm:ring-white/15 overflow-hidden'
-            : 'max-w-3xl min-h-[100dvh] rounded-none sm:rounded-3xl border-0 sm:border sm:border-white/10 shadow-2xl overflow-hidden'
+            ? `max-w-[580px] lg:max-w-[620px] h-[100dvh] sm:h-[960px] sm:max-h-[98vh] sm:rounded-[52px] sm:border-[10px] overflow-hidden ${
+                isEffectiveDark
+                  ? 'sm:border-zinc-800 shadow-[0_25px_80px_rgba(0,0,0,0.85)] sm:ring-1 sm:ring-white/15'
+                  : 'sm:border-slate-300 shadow-[0_25px_80px_rgba(0,0,0,0.25)] sm:ring-1 sm:ring-black/10'
+              }`
+            : `max-w-4xl min-h-[100dvh] rounded-none sm:rounded-3xl border-0 sm:border shadow-2xl overflow-hidden ${
+                isEffectiveDark ? 'sm:border-white/10' : 'sm:border-slate-300'
+              }`
         }`}
       >
-        {/* Android Status Bar */}
-        <AndroidStatusBar />
+        {/* Android Status Bar with 12/24h and active city timezone */}
+        <AndroidStatusBar
+          timeFormat={settings.timeFormat || '24h'}
+          timezone={activeCity?.timezone}
+          theme={isEffectiveDark ? 'dark' : 'light'}
+        />
 
         {/* Main Content Area */}
-        <div className="relative flex-1 overflow-y-auto overflow-x-hidden no-scrollbar bg-slate-900">
+        <div className={`relative flex-1 overflow-y-auto overflow-x-hidden no-scrollbar ${
+          isEffectiveDark ? 'bg-slate-900' : 'bg-slate-100'
+        }`}>
           {isLoading && !weatherData ? (
             /* Loading State */
             <div
@@ -437,36 +498,95 @@ export default function App() {
               weatherCode={weatherData.current.weatherCode}
               isDay={weatherData.current.isDay}
             >
-              <div className="px-3.5 sm:px-5 pb-6">
-                {/* 1. Hero Current Weather */}
+              {/* 1. Top Header Bar: Menu, City Name + Day/Time, Widget, Add */}
+              <WeatherAppHeader
+                city={activeCity}
+                settings={settings}
+                onOpenMenu={() => setIsCityDrawerOpen(true)}
+                onOpenSearch={() => setIsSearchOpen(true)}
+                onOpenWidget={() => setIsWidgetModalOpen(true)}
+                theme={isEffectiveDark ? 'dark' : 'light'}
+              />
+
+              <div className="px-3.5 sm:px-4 pb-6">
+                {/* 2. Hero Weather Section: 阴, 28° C, ↑35° ↓26° 👕36°, 在120分鐘內無降水 > */}
                 <CurrentWeatherHero
                   data={weatherData}
                   settings={settings}
+                  isRefreshing={isRefreshing}
+                  onRefresh={() => loadWeather(activeCity, true)}
                   onOpenCityDrawer={() => setIsCityDrawerOpen(true)}
+                  onOpenRadar={() => setIsWidgetModalOpen(true)}
                   totalSavedCities={savedCities.length}
                   currentCityIndex={currentCityIndex >= 0 ? currentCityIndex : 0}
+                  savedCities={savedCities}
                 />
 
-                {/* 2. Google AdMob Banner Ad Slot (預留 Google 廣告橫幅版位) */}
-                <div className="mb-4">
+                {/* Google AdMob Banner Ad Slot */}
+                <div className="mb-3.5">
                   <GoogleAdSlot type="banner" lang={lang} />
                 </div>
 
-                {/* 3. 24-Hour Hourly Forecast Card */}
+                {/* 3. 小時預報 (Hourly Forecast with continuous curve line & 48h) */}
                 <HourlyForecastCard
                   hourly={weatherData.hourly}
                   settings={settings}
                 />
 
-                {/* 4. 7-Day Forecast Trend Card */}
+                {/* 4. 每日預報 📑 (Daily Forecast with dual high/low curves, shaded area, and 15 days) */}
                 <DailyForecastCard
                   daily={weatherData.daily}
                   settings={settings}
                 />
 
-                {/* 5. Weather Metrics (AQI, UV, Sun, Wind, Humidity, Visibility) */}
-                <WeatherMetricsGrid
-                  data={weatherData}
+                {/* 5. 風 (mph/kmh) 🧭 (Wind Speed & Direction Trend with Mini Compasses) */}
+                <WindTrendCard
+                  daily={weatherData.daily}
+                  settings={settings}
+                />
+
+                {/* 6. 今日詳情 (Today's Details 3x2 Grid: 濕度, 紫外線, 能見度, 雨露, 海拔, 雲量) */}
+                <TodayDetailsGrid
+                  current={weatherData.current}
+                  daily={weatherData.daily}
+                  city={weatherData.city}
+                  settings={settings}
+                />
+
+                {/* 7. 風 / 壓強 (Wind turbines animation, direction, speed, scale & barometer pressure) */}
+                <WindPressureCard
+                  current={weatherData.current}
+                  settings={settings}
+                />
+
+                {/* 8. 空氣質量指數 (AQI Ring Gauge & PM2.5, PM10, CO, NO2, SO2, O3) */}
+                <AqiDetailsCard
+                  airQuality={weatherData.airQuality}
+                  settings={settings}
+                />
+
+                {/* 9. 過敏 (Allergens: 灰塵和皮屑, 樹木花粉, 青草花粉) */}
+                <AllergensCard
+                  current={weatherData.current}
+                  settings={settings}
+                />
+
+                {/* 10. 攝影 (Photography: 黃金時段 & 藍色時段) */}
+                <PhotographyCard
+                  daily={weatherData.daily}
+                  settings={settings}
+                />
+
+                {/* 11. 雷達地圖 (Dynamic Radar Map preview) */}
+                <RadarMapCard
+                  city={weatherData.city}
+                  settings={settings}
+                  onOpenRadarModal={() => setIsWidgetModalOpen(true)}
+                />
+
+                {/* 12. 日月 (Sun Arc Trajectory & Moon Phase) */}
+                <SunMoonCycleCard
+                  daily={weatherData.daily}
                   settings={settings}
                 />
 
@@ -485,6 +605,7 @@ export default function App() {
           onTabChange={handleTabChange}
           onOpenSearch={() => setIsSearchOpen(true)}
           lang={lang}
+          theme={isEffectiveDark ? 'dark' : 'light'}
         />
       </div>
 
@@ -526,6 +647,9 @@ export default function App() {
           setSettings((prev) => ({ ...prev, ...newSettings }))
         }
         onOpenWidgets={() => setIsWidgetModalOpen(true)}
+        onOpenRating={() => setShowRatingPrompt(true)}
+        savedCities={savedCities}
+        currentCity={activeCity}
       />
 
       {/* Home Screen Weather Widgets Modal */}
@@ -548,6 +672,20 @@ export default function App() {
         onAllow={handleAllowInitialLocation}
         onDeny={handleDenyInitialLocation}
         lang={lang}
+      />
+
+      {/* In-App Rating & Feedback Modal Prompt */}
+      <AppRatingModal
+        isOpen={showRatingPrompt}
+        onClose={() => setShowRatingPrompt(false)}
+        lang={lang}
+        onRated={(score, feedback) => {
+          localStorage.setItem('precision_weather_rated', 'true');
+          localStorage.setItem('precision_weather_rating_score', score.toString());
+          if (feedback) {
+            localStorage.setItem('precision_weather_rating_feedback', feedback);
+          }
+        }}
       />
     </div>
   );

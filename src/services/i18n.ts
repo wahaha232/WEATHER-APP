@@ -97,14 +97,33 @@ export interface TranslationDict {
   celsius: string;
   fahrenheit: string;
   windUnitLabel: string;
+  timeFormatLabel: string;
+  timeFormat12h: string;
+  timeFormat24h: string;
+  dstAutoDetect: string;
+  dstActiveBadge: string;
+  secondaryClockTitle: string;
+  secondaryClockDesc: string;
+  secondaryClockNone: string;
+  selectSecondaryCity: string;
   languageLabel: string;
   langZh: string;
   langEn: string;
   phoneFrameModeLabel: string;
   phoneFrameModeDesc: string;
+  themeLabel: string;
+  themeDark: string;
+  themeLight: string;
+  themeSystem: string;
+  themeDesc: string;
   techInfoTitle: string;
   techInfoDesc: string;
   finishSettings: string;
+  
+  // Dual Clock & Local Time
+  localTimeTitle: string;
+  secondCityTimeTitle: string;
+  timeDifference: (hours: string) => string;
   
   cityDrawerTitle: string;
   addNewCity: string;
@@ -244,14 +263,33 @@ export const TRANSLATIONS: Record<AppLanguage, TranslationDict> = {
     celsius: '攝氏 (°C)',
     fahrenheit: '華氏 (°F)',
     windUnitLabel: '風速單位',
+    timeFormatLabel: '時間制式 (12/24 小時制)',
+    timeFormat12h: '12 小時制 (上午/下午)',
+    timeFormat24h: '24 小時制 (00:00 - 23:59)',
+    dstAutoDetect: '自動識別日光節約時間 (DST)',
+    dstActiveBadge: '日光節約時間 (夏令時間) 生效中',
+    secondaryClockTitle: '第 2 地時間 (雙時區時鐘)',
+    secondaryClockDesc: '在天氣卡片與小工具中同時顯示第二城市的即時當地時間',
+    secondaryClockNone: '未設定 (僅顯示目前城市)',
+    selectSecondaryCity: '選擇第 2 地城市',
     languageLabel: '語言選擇 (Language)',
     langZh: '繁體中文 (Chinese)',
     langEn: 'English (英文)',
     phoneFrameModeLabel: 'Android 手機外框模式',
     phoneFrameModeDesc: '模擬真實 Android 手機頂部狀態列與導航條',
+    themeLabel: '佈景主題 (Theme)',
+    themeDark: '黑 (深色模式)',
+    themeLight: '白 (淺色模式)',
+    themeSystem: '裝置 (跟隨系統)',
+    themeDesc: '選擇深色、淺色或自動跟隨裝置系統外觀',
     techInfoTitle: '氣象資料與技術規格說明',
-    techInfoDesc: '本天氣應用程式整合 Open-Meteo 開放氣象 API，完全免費且無需任何 API 金鑰。支援全球高精度逐時預報、7 天趨勢、AQI 空氣品質與精確定位。',
+    techInfoDesc: '本天氣應用程式整合 Open-Meteo 開放氣象 API，完全免費且無需任何 API 金鑰。支援全球高精度逐時預報、7 天趨勢、AQI 空氣品質、精確時區與自動夏令時間 (DST) 轉換。',
     finishSettings: '完成設定',
+
+    // Dual Clock & Local Time
+    localTimeTitle: '當地時間',
+    secondCityTimeTitle: '第 2 地時間',
+    timeDifference: (hours: string) => `時差：${hours}`,
     
     cityDrawerTitle: '我的城市列表',
     addNewCity: '新增其他城市',
@@ -386,14 +424,33 @@ export const TRANSLATIONS: Record<AppLanguage, TranslationDict> = {
     celsius: 'Celsius (°C)',
     fahrenheit: 'Fahrenheit (°F)',
     windUnitLabel: 'Wind Speed Unit',
+    timeFormatLabel: 'Time Format (12h / 24h)',
+    timeFormat12h: '12-Hour (AM / PM)',
+    timeFormat24h: '24-Hour (00:00 - 23:59)',
+    dstAutoDetect: 'Auto-detect Daylight Saving Time (DST)',
+    dstActiveBadge: 'Daylight Saving Time (DST) Active',
+    secondaryClockTitle: 'Secondary Location Time (Dual Clock)',
+    secondaryClockDesc: 'Display a second city\'s live local time on the weather hero card and widgets',
+    secondaryClockNone: 'None (Primary city only)',
+    selectSecondaryCity: 'Select 2nd Location',
     languageLabel: 'Language (語言)',
     langZh: '繁體中文 (Chinese)',
     langEn: 'English (英文)',
     phoneFrameModeLabel: 'Android Phone Frame Mode',
     phoneFrameModeDesc: 'Simulate Android status bar and navigation gestures',
+    themeLabel: 'Theme (佈景主題)',
+    themeDark: 'Dark (黑)',
+    themeLight: 'Light (白)',
+    themeSystem: 'System (裝置)',
+    themeDesc: 'Choose Dark, Light, or follow your device system settings',
     techInfoTitle: 'Data & Technical Specifications',
-    techInfoDesc: 'Powered by Open-Meteo open weather API, free with no API key required. Supports high-precision hourly forecast, 7-day trend, AQI, and granular location geocoding.',
+    techInfoDesc: 'Powered by Open-Meteo open weather API, free with no API key required. Supports high-precision hourly forecast, 7-day trend, AQI, timezone offset, and automatic DST conversion.',
     finishSettings: 'Done',
+
+    // Dual Clock & Local Time
+    localTimeTitle: 'Local Time',
+    secondCityTimeTitle: '2nd City Time',
+    timeDifference: (hours: string) => `Diff: ${hours}`,
     
     cityDrawerTitle: 'My Cities',
     addNewCity: 'Add Another City',

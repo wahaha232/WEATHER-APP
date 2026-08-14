@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   X,
@@ -10,9 +10,18 @@ import {
   Check,
   Clock,
   LayoutGrid,
+  Globe,
+  SunMedium,
+  Timer,
+  MapPin,
+  Star,
+  Palette,
+  Moon,
+  Sun,
 } from 'lucide-react';
-import { WeatherSettings } from '../types';
+import { SavedCity, WeatherSettings } from '../types';
 import { TRANSLATIONS } from '../services/i18n';
+import { formatLocalTime, resolveTimezone, isDaylightSavingTime } from '../services/timeService';
 
 interface WeatherSettingsModalProps {
   isOpen: boolean;
@@ -20,6 +29,9 @@ interface WeatherSettingsModalProps {
   settings: WeatherSettings;
   onUpdateSettings: (newSettings: Partial<WeatherSettings>) => void;
   onOpenWidgets?: () => void;
+  onOpenRating?: () => void;
+  savedCities?: SavedCity[];
+  currentCity?: SavedCity;
 }
 
 export const WeatherSettingsModal: React.FC<WeatherSettingsModalProps> = ({
@@ -28,11 +40,35 @@ export const WeatherSettingsModal: React.FC<WeatherSettingsModalProps> = ({
   settings,
   onUpdateSettings,
   onOpenWidgets,
+  onOpenRating,
+  savedCities = [],
+  currentCity,
 }) => {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   if (!isOpen) return null;
 
   const t = TRANSLATIONS[settings.language || 'zh'];
   const REFRESH_INTERVALS = [5, 10, 15, 20, 25, 30];
+
+  const primaryTz = resolveTimezone(currentCity?.timezone, currentCity?.latitude, currentCity?.longitude);
+  const isPrimaryDst = isDaylightSavingTime(now, primaryTz);
+
+  const secondaryCity = savedCities.find((c) => String(c.id) === String(settings.secondaryCityId));
+  const secondaryTz = secondaryCity ? resolveTimezone(secondaryCity.timezone, secondaryCity.latitude, secondaryCity.longitude) : undefined;
+  const isSecondaryDst = secondaryTz ? isDaylightSavingTime(now, secondaryTz) : false;
+
+  const primaryTimeSample = formatLocalTime(
+    now,
+    primaryTz,
+    settings.timeFormat === '12h',
+    settings.language || 'zh'
+  );
 
   return (
     <div
@@ -41,7 +77,7 @@ export const WeatherSettingsModal: React.FC<WeatherSettingsModalProps> = ({
     >
       <div
         id="weather-settings-modal-container"
-        className="w-full max-w-md bg-zinc-900/95 border border-white/20 rounded-3xl p-5 shadow-2xl text-white flex flex-col max-h-[85vh] overflow-hidden"
+        className="w-full max-w-md bg-zinc-900/95 border border-white/20 rounded-3xl p-5 shadow-2xl text-white flex flex-col max-h-[88vh] overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-white/10">
@@ -60,7 +96,155 @@ export const WeatherSettingsModal: React.FC<WeatherSettingsModalProps> = ({
 
         {/* Options List */}
         <div className="flex-1 overflow-y-auto space-y-4 my-4 no-scrollbar pr-1">
-          {/* Auto Refresh Interval Options: 5 / 10 / 15 / 20 / 25 / 30 mins */}
+          {/* ========================================================================= */}
+          {/* 1. Time Format: 12-Hour vs 24-Hour Switcher */}
+          {/* ========================================================================= */}
+          <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-white">
+                <Timer className="w-4 h-4 text-amber-400" />
+                <span>{t.timeFormatLabel}</span>
+              </div>
+              <span className="text-xs font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                {primaryTimeSample.timeString}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2.5">
+              <button
+                id="btn-time-format-12h"
+                onClick={() => onUpdateSettings({ timeFormat: '12h' })}
+                className={`py-2.5 px-3 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  settings.timeFormat === '12h'
+                    ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-md font-bold'
+                    : 'bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {settings.timeFormat === '12h' && <Check className="w-3.5 h-3.5 text-zinc-950" />}
+                <span>{t.timeFormat12h}</span>
+              </button>
+              <button
+                id="btn-time-format-24h"
+                onClick={() => onUpdateSettings({ timeFormat: '24h' })}
+                className={`py-2.5 px-3 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  settings.timeFormat !== '12h'
+                    ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-md font-bold'
+                    : 'bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {settings.timeFormat !== '12h' && <Check className="w-3.5 h-3.5 text-zinc-950" />}
+                <span>{t.timeFormat24h}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* 2. Automatic Daylight Saving Time (DST) Detection Card */}
+          {/* ========================================================================= */}
+          <div className="bg-gradient-to-r from-amber-950/40 to-orange-950/30 p-4 rounded-2xl border border-amber-500/25">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/30 mt-0.5">
+                  <SunMedium className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-white flex items-center gap-2">
+                    <span>{t.dstAutoDetect}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
+                      AUTO
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-white/60 mt-1 leading-relaxed">
+                    {currentCity?.name || '當地'}：{primaryTimeSample.timezoneName} ({primaryTimeSample.utcOffsetString})
+                  </p>
+                  {isPrimaryDst ? (
+                    <div className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                      <Check className="w-3 h-3 text-amber-400" />
+                      <span>{t.dstActiveBadge}</span>
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-[11px] text-white/40">
+                      標準時間（目前未實施日光節約時制）
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ========================================================================= */}
+          {/* 3. Secondary Location Time (Dual Clock) */}
+          {/* ========================================================================= */}
+          <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+            <div className="flex items-center gap-2 text-sm font-medium text-white mb-1.5">
+              <Globe className="w-4 h-4 text-sky-400" />
+              <span>{t.secondaryClockTitle}</span>
+            </div>
+            <p className="text-[11px] text-white/50 mb-3 leading-relaxed">
+              {t.secondaryClockDesc}
+            </p>
+
+            <div className="space-y-2">
+              {/* Option: None */}
+              <button
+                id="btn-secondary-city-none"
+                onClick={() => onUpdateSettings({ secondaryCityId: undefined })}
+                className={`w-full p-2.5 rounded-xl text-xs font-medium border flex items-center justify-between transition-all cursor-pointer ${
+                  !settings.secondaryCityId
+                    ? 'bg-sky-500/20 text-sky-300 border-sky-400/50 shadow-sm'
+                    : 'bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <span>{t.secondaryClockNone}</span>
+                {!settings.secondaryCityId && <Check className="w-4 h-4 text-sky-400" />}
+              </button>
+
+              {/* Saved cities to pick as 2nd location */}
+              {savedCities
+                .filter((c) => String(c.id) !== String(currentCity?.id))
+                .map((city) => {
+                  const isSelected = String(settings.secondaryCityId) === String(city.id);
+                  const cityTz = resolveTimezone(city.timezone, city.latitude, city.longitude);
+                  const cityTime = formatLocalTime(
+                    now,
+                    cityTz,
+                    settings.timeFormat === '12h',
+                    settings.language || 'zh'
+                  );
+                  const isDst = isDaylightSavingTime(now, cityTz);
+
+                  return (
+                    <button
+                      key={city.id}
+                      id={`btn-secondary-city-${city.id}`}
+                      onClick={() => onUpdateSettings({ secondaryCityId: city.id })}
+                      className={`w-full p-2.5 rounded-xl text-xs font-medium border flex items-center justify-between transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-sky-500 text-white border-sky-400 shadow-md font-semibold'
+                          : 'bg-white/5 text-white/80 border-white/10 hover:bg-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <MapPin className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-sky-400'}`} />
+                        <span>{city.name}</span>
+                        {isDst && (
+                          <span className={`text-[9px] px-1.5 py-0.2 rounded ${isSelected ? 'bg-black/20 text-white' : 'bg-amber-500/20 text-amber-300'}`}>
+                            DST
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-mono text-xs ${isSelected ? 'text-white font-bold' : 'text-white/70'}`}>
+                          {cityTime.timeString}
+                        </span>
+                        {isSelected && <Check className="w-4 h-4 text-white" />}
+                      </div>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+
+          {/* Auto Refresh Interval Options */}
           <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
             <div className="flex items-center justify-between mb-1.5">
               <div className="flex items-center gap-2 text-sm font-medium text-white">
@@ -110,7 +294,7 @@ export const WeatherSettingsModal: React.FC<WeatherSettingsModalProps> = ({
                     {t.widgetCenterTitle}
                   </div>
                   <div className="text-[11px] text-white/60">
-                    4x2, 4x1, 2x2 & Glance
+                    4x2, 4x1, 2x2 & Dual-Clock
                   </div>
                 </div>
               </div>
@@ -126,6 +310,78 @@ export const WeatherSettingsModal: React.FC<WeatherSettingsModalProps> = ({
               </button>
             </div>
           )}
+
+          {/* Theme Switcher: 黑 (Dark) / 白 (Light) / 裝置 (System/Device) */}
+          <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-white">
+                <Palette className="w-4 h-4 text-purple-400" />
+                <span>{t.themeLabel}</span>
+              </div>
+              <span className="text-xs font-bold text-purple-300 bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-500/30">
+                {settings.theme === 'light'
+                  ? (settings.language === 'zh' ? '白' : 'Light')
+                  : settings.theme === 'dark'
+                  ? (settings.language === 'zh' ? '黑' : 'Dark')
+                  : (settings.language === 'zh' ? '裝置' : 'Device')}
+              </span>
+            </div>
+            <p className="text-[11px] text-white/50 mb-3">
+              {t.themeDesc}
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {/* Dark: 黑 */}
+              <button
+                id="btn-theme-dark"
+                onClick={() => onUpdateSettings({ theme: 'dark' })}
+                className={`py-2.5 px-2 rounded-xl text-xs font-semibold border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  (settings.theme || 'dark') === 'dark'
+                    ? 'bg-purple-600 text-white border-purple-400 shadow-md font-bold'
+                    : 'bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <Moon className="w-3.5 h-3.5" />
+                  <span>{settings.language === 'zh' ? '黑' : 'Dark'}</span>
+                </div>
+                {(settings.theme || 'dark') === 'dark' && <Check className="w-3 h-3 text-white" />}
+              </button>
+
+              {/* Light: 白 */}
+              <button
+                id="btn-theme-light"
+                onClick={() => onUpdateSettings({ theme: 'light' })}
+                className={`py-2.5 px-2 rounded-xl text-xs font-semibold border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  settings.theme === 'light'
+                    ? 'bg-purple-600 text-white border-purple-400 shadow-md font-bold'
+                    : 'bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <Sun className="w-3.5 h-3.5" />
+                  <span>{settings.language === 'zh' ? '白' : 'Light'}</span>
+                </div>
+                {settings.theme === 'light' && <Check className="w-3 h-3 text-white" />}
+              </button>
+
+              {/* System: 裝置 */}
+              <button
+                id="btn-theme-system"
+                onClick={() => onUpdateSettings({ theme: 'system' })}
+                className={`py-2.5 px-2 rounded-xl text-xs font-semibold border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  settings.theme === 'system'
+                    ? 'bg-purple-600 text-white border-purple-400 shadow-md font-bold'
+                    : 'bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>{settings.language === 'zh' ? '裝置' : 'Device'}</span>
+                </div>
+                {settings.theme === 'system' && <Check className="w-3 h-3 text-white" />}
+              </button>
+            </div>
+          </div>
 
           {/* Language Switcher */}
           <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
@@ -260,13 +516,57 @@ export const WeatherSettingsModal: React.FC<WeatherSettingsModalProps> = ({
             </button>
           </div>
 
-          {/* About & API info */}
-          <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-xs text-white/70 space-y-2">
-            <div className="flex items-center gap-2 font-medium text-white">
-              <Info className="w-4 h-4 text-sky-400" />
-              <span>{t.techInfoTitle}</span>
+          {/* Rate App & User Feedback Entry */}
+          <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 p-4 rounded-2xl border border-amber-500/30 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-white">
+                  {settings.language === 'zh' ? '為 APP 評分與建議' : 'Rate App & Feedback'}
+                </div>
+                <div className="text-[11px] text-white/60 mt-0.5">
+                  {settings.language === 'zh' ? '滿意我們的精準天氣嗎？給予我們 5 星好評！' : 'Loving the app? Give us 5 stars!'}
+                </div>
+              </div>
             </div>
-            <p className="leading-relaxed text-white/60">
+            {onOpenRating && (
+              <button
+                id="btn-settings-open-rating"
+                onClick={() => {
+                  onClose();
+                  onOpenRating();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-zinc-950 font-bold text-xs shadow-md transition-all cursor-pointer"
+              >
+                {settings.language === 'zh' ? '立即評分' : 'Rate Now'}
+              </button>
+            )}
+          </div>
+
+          {/* About & API info */}
+          <div className="bg-white/5 p-4 rounded-2xl border border-white/10 text-xs text-white/70 space-y-3">
+            <div className="flex items-center gap-3">
+              <img
+                src="/icon.svg"
+                alt="天氣即時通 App Icon"
+                className="w-12 h-12 rounded-2xl shadow-lg border border-white/15 object-cover flex-shrink-0"
+                referrerPolicy="no-referrer"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-white text-sm">天氣即時通</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-mono border border-sky-400/30">
+                    v1.0.0
+                  </span>
+                </div>
+                <div className="text-[11px] text-white/50 truncate mt-0.5">
+                  Android Material You & PWA Weather
+                </div>
+              </div>
+            </div>
+            <p className="leading-relaxed text-white/60 pt-1 border-t border-white/10">
               {t.techInfoDesc}
             </p>
           </div>

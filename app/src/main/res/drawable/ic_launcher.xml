@@ -4,10 +4,38 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Sky Blue Rounded Background -->
     <path
-        android:fillColor="#0A2649"
+        android:fillColor="#1EA1F7"
         android:pathData="M0,0h108v108h-108z" />
+
+    <!-- Sun Ray Dots -->
     <path
-        android:fillColor="#FBBF24"
-        android:pathData="M54,34a20,20 0 1,0 0,40a20,20 0 1,0 0,-40" />
+        android:fillColor="#FDD835"
+        android:pathData="M72,20a1.5,1.5 0 1,0 0,3a1.5,1.5 0 1,0 0,-3 M82,24a1.5,1.5 0 1,0 0,3a1.5,1.5 0 1,0 0,-3 M88,35a1.5,1.5 0 1,0 0,3a1.5,1.5 0 1,0 0,-3 M84,47a1.5,1.5 0 1,0 0,3a1.5,1.5 0 1,0 0,-3 M61,25a1.5,1.5 0 1,0 0,3a1.5,1.5 0 1,0 0,-3" />
+
+    <!-- Sun Body -->
+    <path
+        android:fillColor="#FDB813"
+        android:pathData="M73,34a12,12 0 1,0 0,24a12,12 0 1,0 0,-24" />
+
+    <!-- White Cloud Body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M41,67 L73,67 A10,10 0 0,0 83,57 A10,10 0 0,0 79,48 A14,14 0 0,0 67,32 A14,14 0 0,0 54,36 A10,10 0 0,0 44,38 A11,11 0 0,0 31,48 A11,11 0 0,0 31,57 A10,10 0 0,0 41,67 Z" />
+
+    <!-- Left Raindrop -->
+    <path
+        android:fillColor="#40C4FF"
+        android:pathData="M38,73 C38,73 35,79 35,83 A3,3 0 0,0 41,83 C41,79 38,73 38,73 Z" />
+
+    <!-- Right Raindrop -->
+    <path
+        android:fillColor="#40C4FF"
+        android:pathData="M70,72 C70,72 67,78 67,81 A3,3 0 0,0 73,81 C73,78 70,72 70,72 Z" />
+
+    <!-- Lightning Bolt -->
+    <path
+        android:fillColor="#FFA000"
+        android:pathData="M55,61 L48,77 L56,76 L50,92 L63,73 L55,73 Z" />
 </vector>

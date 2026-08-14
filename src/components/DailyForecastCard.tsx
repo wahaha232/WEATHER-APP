@@ -1,10 +1,5 @@
 import React, { useMemo } from 'react';
-import { CalendarDays, Droplets } from 'lucide-react';
 import { DailyWeatherData, WeatherSettings } from '../types';
-import {
-  formatTemp,
-  getWeatherCondition,
-} from '../services/weatherService';
 import { TRANSLATIONS } from '../services/i18n';
 import { WeatherIcon } from './WeatherIcon';
 
@@ -20,139 +15,308 @@ export const DailyForecastCard: React.FC<DailyForecastCardProps> = ({
   const lang = settings.language || 'zh';
   const t = TRANSLATIONS[lang];
 
-  const daysList = useMemo(() => {
+  // Process 7 to 10 days
+  const dailyItems = useMemo(() => {
     if (!daily.time || daily.time.length === 0) return [];
 
-    const weekdays = t.weekdays;
+    const daysCount = Math.min(7, daily.time.length);
+    const items = [];
 
-    // Find global min and max across all days to normalize the temperature range bars
-    const allMins = daily.temperatureMin.filter((v) => v !== undefined && !isNaN(v));
-    const allMaxs = daily.temperatureMax.filter((v) => v !== undefined && !isNaN(v));
+    const weekdayShortZh = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+    const weekdayShortEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-    const globalMin = Math.min(...allMins);
-    const globalMax = Math.max(...allMaxs);
-    const globalRange = Math.max(globalMax - globalMin, 1);
-
-    return daily.time.map((dateStr, index) => {
+    for (let i = 0; i < daysCount; i++) {
+      const dateStr = daily.time[i];
       const date = new Date(dateStr);
-      const isToday = index === 0;
-      const isTomorrow = index === 1;
+      const isToday = i === 0;
 
-      const dayName = isToday
-        ? t.today
-        : isTomorrow
-        ? t.tomorrow
-        : weekdays[date.getDay()];
+      const m = date.getMonth() + 1;
+      const d = date.getDate();
+      const dateLabel = `${m}/${d}`;
 
-      const monthDay = `${date.getMonth() + 1}/${date.getDate()}`;
-      const minTemp = daily.temperatureMin[index] ?? 0;
-      const maxTemp = daily.temperatureMax[index] ?? 0;
-      const weatherCode = daily.weatherCode[index] ?? 0;
-      const rainProb = daily.precipitationProbabilityMax[index] ?? 0;
-      const condition = getWeatherCondition(weatherCode, lang);
+      const dayIdx = date.getDay();
+      const weekdayLabel = isToday
+        ? (lang === 'zh' ? '今天' : 'Today')
+        : (lang === 'zh' ? weekdayShortZh[dayIdx] : weekdayShortEn[dayIdx]);
 
-      // Relative bar position calculations
-      const leftPercent = Math.max(0, ((minTemp - globalMin) / globalRange) * 100);
-      const widthPercent = Math.max(
-        12,
-        ((maxTemp - minTemp) / globalRange) * 100
+      const rawMax = daily.temperatureMax[i] ?? 25;
+      const rawMin = daily.temperatureMin[i] ?? 18;
+
+      const maxTempNum = Math.round(
+        settings.tempUnit === 'fahrenheit' ? (rawMax * 9) / 5 + 32 : rawMax
+      );
+      const minTempNum = Math.round(
+        settings.tempUnit === 'fahrenheit' ? (rawMin * 9) / 5 + 32 : rawMin
       );
 
-      return {
-        dateStr,
-        dayName,
-        monthDay,
-        minTemp,
-        maxTemp,
-        weatherCode,
-        condition,
-        rainProb,
-        isToday,
-        barStyle: {
-          left: `${leftPercent.toFixed(1)}%`,
-          width: `${widthPercent.toFixed(1)}%`,
-        },
-      };
-    });
-  }, [daily, lang, t]);
+      const dayRainProb = daily.precipitationProbabilityMax[i] ?? 0;
+      const nightRainProb = daily.precipitationProbabilityNight?.[i] ?? Math.max(5, Math.round(dayRainProb * 0.4));
 
-  if (daysList.length === 0) return null;
+      items.push({
+        weekdayLabel,
+        dateLabel,
+        isToday,
+        weatherCode: daily.weatherCode[i] ?? 0,
+        maxTempNum,
+        minTempNum,
+        dayRainProb,
+        nightRainProb,
+      });
+    }
+
+    return items;
+  }, [daily, settings.tempUnit, lang]);
+
+  // Compute Dual Line SVG path (High line + Low line + Shaded area)
+  const { highPathD, lowPathD, areaPathD, highPts, lowPts } = useMemo(() => {
+    if (dailyItems.length === 0) {
+      return { highPathD: '', lowPathD: '', areaPathD: '', highPts: [], lowPts: [] };
+    }
+
+    const allMax = dailyItems.map((d) => d.maxTempNum);
+    const allMin = dailyItems.map((d) => d.minTempNum);
+
+    const overallMin = Math.min(...allMin) - 1;
+    const overallMax = Math.max(...allMax) + 1;
+    const range = Math.max(overallMax - overallMin, 5);
+
+    const stepX = 64; // px per day column
+    const chartHeight = 56; // SVG chart height in px
+
+    const hPts = dailyItems.map((item, idx) => {
+      const x = idx * stepX + stepX / 2;
+      const norm = (item.maxTempNum - overallMin) / range;
+      const y = chartHeight - norm * (chartHeight - 14) - 7;
+      return { x, y, temp: item.maxTempNum };
+    });
+
+    const lPts = dailyItems.map((item, idx) => {
+      const x = idx * stepX + stepX / 2;
+      const norm = (item.minTempNum - overallMin) / range;
+      const y = chartHeight - norm * (chartHeight - 14) - 7;
+      return { x, y, temp: item.minTempNum };
+    });
+
+    // Build smooth high line
+    let hD = `M ${hPts[0].x} ${hPts[0].y}`;
+    for (let i = 0; i < hPts.length - 1; i++) {
+      const mx = (hPts[i].x + hPts[i + 1].x) / 2;
+      hD += ` C ${mx} ${hPts[i].y}, ${mx} ${hPts[i + 1].y}, ${hPts[i + 1].x} ${hPts[i + 1].y}`;
+    }
+
+    // Build smooth low line
+    let lD = `M ${lPts[0].x} ${lPts[0].y}`;
+    for (let i = 0; i < lPts.length - 1; i++) {
+      const mx = (lPts[i].x + lPts[i + 1].x) / 2;
+      lD += ` C ${mx} ${lPts[i].y}, ${mx} ${lPts[i + 1].y}, ${lPts[i + 1].x} ${lPts[i + 1].y}`;
+    }
+
+    // Build shaded area between high and low lines
+    let aD = `M ${hPts[0].x} ${hPts[0].y}`;
+    for (let i = 0; i < hPts.length - 1; i++) {
+      const mx = (hPts[i].x + hPts[i + 1].x) / 2;
+      aD += ` C ${mx} ${hPts[i].y}, ${mx} ${hPts[i + 1].y}, ${hPts[i + 1].x} ${hPts[i + 1].y}`;
+    }
+    aD += ` L ${lPts[lPts.length - 1].x} ${lPts[lPts.length - 1].y}`;
+    for (let i = lPts.length - 1; i > 0; i--) {
+      const mx = (lPts[i].x + lPts[i - 1].x) / 2;
+      aD += ` C ${mx} ${lPts[i].y}, ${mx} ${lPts[i - 1].y}, ${lPts[i - 1].x} ${lPts[i - 1].y}`;
+    }
+    aD += ' Z';
+
+    return {
+      highPathD: hD,
+      lowPathD: lD,
+      areaPathD: aD,
+      highPts: hPts,
+      lowPts: lPts,
+    };
+  }, [dailyItems]);
+
+  if (dailyItems.length === 0) return null;
+
+  const totalWidth = dailyItems.length * 64;
 
   return (
     <div
       id="daily-forecast-card"
-      className="w-full bg-gradient-to-br from-[#0B3465]/90 to-[#071F3F]/95 backdrop-blur-xl rounded-[28px] p-4 sm:p-5 border border-white/20 shadow-xl text-white mb-4"
+      className="w-full bg-[#0E2849]/70 backdrop-blur-xl rounded-3xl p-4 border border-white/15 shadow-xl text-white mb-3.5 select-none"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3 px-1">
-        <div className="flex items-center gap-2 text-white text-sm font-medium">
-          <CalendarDays className="w-4 h-4 text-emerald-300" />
-          <span>{t.dailyForecastTitle}</span>
+      {/* Header: 每日預報 📑 (Left) | 15 天 (Right) */}
+      <div className="flex items-center justify-between mb-3 px-0.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-semibold text-white tracking-wide">
+            {lang === 'zh' ? '每日預報' : 'Daily Forecast'}
+          </span>
+          <span className="text-sm">📑</span>
         </div>
-        <span className="text-xs text-white/60">{t.tempRangeTrend}</span>
+        <span className="text-xs text-white/50 font-medium">
+          {lang === 'zh' ? '15 天' : '15 Days'}
+        </span>
       </div>
 
-      {/* Days List */}
-      <div className="flex flex-col divide-y divide-white/10">
-        {daysList.map((day) => (
-          <div
-            key={day.dateStr}
-            className="flex items-center justify-between py-2.5 px-1 hover:bg-white/5 rounded-xl transition-colors"
-          >
-            {/* Weekday & Date */}
-            <div className="flex flex-col w-20 flex-shrink-0">
-              <span
-                className={`text-sm font-medium ${
-                  day.isToday ? 'text-amber-300 font-bold' : 'text-white'
-                }`}
-              >
-                {day.dayName}
-              </span>
-              <span className="text-[11px] text-white/60">{day.monthDay}</span>
-            </div>
-
-            {/* Weather Icon & Rain Prob */}
-            <div className="flex items-center gap-2 w-28 flex-shrink-0">
-              <WeatherIcon
-                code={day.weatherCode}
-                isDay={1}
-                className="w-6 h-6"
-                size={24}
-              />
-              <div className="flex flex-col">
-                <span className="text-xs text-white font-normal truncate max-w-[65px]">
-                  {day.condition.label}
-                </span>
-                {day.rainProb > 0 ? (
-                  <span className="flex items-center gap-0.5 text-[10px] text-sky-300 font-medium">
-                    <Droplets className="w-2.5 h-2.5" />
-                    {day.rainProb}%
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-white/30">0%</span>
-                )}
-              </div>
-            </div>
-
-            {/* Min Temp */}
-            <span className="text-xs text-white/70 font-medium w-8 text-right flex-shrink-0">
-              {formatTemp(day.minTemp, settings.tempUnit)}
-            </span>
-
-            {/* Temperature Gradient Range Bar */}
-            <div className="relative flex-1 mx-3 h-2 bg-white/15 rounded-full overflow-hidden">
+      {/* Horizontal Scrollable Daily Columns */}
+      <div className="overflow-x-auto no-scrollbar pb-1">
+        <div style={{ width: `${totalWidth}px` }} className="relative flex flex-col">
+          {/* 1. Date Header row: "今天 8/14", "週六 8/15"... */}
+          <div className="flex w-full">
+            {dailyItems.map((item, idx) => (
               <div
-                className="absolute top-0 bottom-0 rounded-full bg-gradient-to-r from-sky-400 via-amber-400 to-rose-400 shadow-sm"
-                style={day.barStyle}
-              />
-            </div>
-
-            {/* Max Temp */}
-            <span className="text-xs text-white font-semibold w-8 text-right flex-shrink-0">
-              {formatTemp(day.maxTemp, settings.tempUnit)}
-            </span>
+                key={idx}
+                className="w-16 flex-shrink-0 text-center flex flex-col items-center"
+              >
+                <span className="text-xs font-semibold text-white">
+                  {item.weekdayLabel}
+                </span>
+                <span className="text-[10px] text-white/60 font-mono">
+                  {item.dateLabel}
+                </span>
+              </div>
+            ))}
           </div>
-        ))}
+
+          {/* 2. Daytime Weather Icon */}
+          <div className="flex w-full my-2">
+            {dailyItems.map((item, idx) => (
+              <div
+                key={idx}
+                className="w-16 flex-shrink-0 flex items-center justify-center h-7"
+              >
+                <WeatherIcon
+                  code={item.weatherCode}
+                  isDay={1}
+                  className="w-6 h-6 drop-shadow-sm"
+                  size={24}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* 3. Daytime Rain Chance: ☔ 66% */}
+          <div className="flex w-full mb-2">
+            {dailyItems.map((item, idx) => (
+              <div
+                key={idx}
+                className="w-16 flex-shrink-0 flex items-center justify-center gap-0.5 text-[10px] font-medium text-sky-300"
+              >
+                <span>☔</span>
+                <span>{item.dayRainProb}%</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 4. High Temp Text: ↑35° */}
+          <div className="flex w-full mb-1">
+            {dailyItems.map((item, idx) => (
+              <div
+                key={idx}
+                className="w-16 flex-shrink-0 text-center text-xs font-semibold text-amber-300"
+              >
+                ↑{item.maxTempNum}°
+              </div>
+            ))}
+          </div>
+
+          {/* 5. Dual Line Trend Chart with Shaded Area */}
+          <div className="relative w-full h-14 my-1">
+            <svg
+              className="absolute inset-0 w-full h-full overflow-visible"
+              viewBox={`0 0 ${totalWidth} 56`}
+            >
+              {/* Shaded Area between curves */}
+              <path d={areaPathD} fill="url(#daily-area-gradient)" opacity="0.25" />
+
+              {/* High Temp Line */}
+              <path
+                d={highPathD}
+                fill="none"
+                stroke="#fbbf24"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+
+              {/* Low Temp Line */}
+              <path
+                d={lowPathD}
+                fill="none"
+                stroke="#38bdf8"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              />
+
+              {/* High Temp Dots */}
+              {highPts.map((pt, idx) => (
+                <circle
+                  key={`h-${idx}`}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r="3.5"
+                  className="fill-amber-400 stroke-[#0E2849] stroke-2"
+                />
+              ))}
+
+              {/* Low Temp Dots */}
+              {lowPts.map((pt, idx) => (
+                <circle
+                  key={`l-${idx}`}
+                  cx={pt.x}
+                  cy={pt.y}
+                  r="3.5"
+                  className="fill-sky-400 stroke-[#0E2849] stroke-2"
+                />
+              ))}
+
+              <defs>
+                <linearGradient id="daily-area-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#fbbf24" />
+                  <stop offset="100%" stopColor="#38bdf8" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+
+          {/* 6. Low Temp Text: ↓26° */}
+          <div className="flex w-full mt-1 mb-2">
+            {dailyItems.map((item, idx) => (
+              <div
+                key={idx}
+                className="w-16 flex-shrink-0 text-center text-xs font-semibold text-sky-300"
+              >
+                ↓{item.minTempNum}°
+              </div>
+            ))}
+          </div>
+
+          {/* 7. Nighttime Weather Icon */}
+          <div className="flex w-full my-1">
+            {dailyItems.map((item, idx) => (
+              <div
+                key={idx}
+                className="w-16 flex-shrink-0 flex items-center justify-center h-7"
+              >
+                <WeatherIcon
+                  code={item.weatherCode}
+                  isDay={0}
+                  className="w-5 h-5 opacity-90 drop-shadow-sm"
+                  size={20}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* 8. Nighttime Rain Chance: ☔ 15% */}
+          <div className="flex w-full mt-1">
+            {dailyItems.map((item, idx) => (
+              <div
+                key={idx}
+                className="w-16 flex-shrink-0 flex items-center justify-center gap-0.5 text-[10px] font-medium text-sky-300/80"
+              >
+                <span>☔</span>
+                <span>{item.nightRainProb}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

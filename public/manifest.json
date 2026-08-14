@@ -1,0 +1,18 @@
+{
+  "name": "天氣即時通",
+  "short_name": "天氣即時通",
+  "description": "即時天氣預報、精準每小時降雨量、48小時連續氣溫走勢與桌面小工具",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#1EA1F7",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
