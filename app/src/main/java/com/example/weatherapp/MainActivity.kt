@@ -2,6 +2,7 @@ package com.example.weatherapp
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.location.Address
 import android.location.Geocoder
 import android.os.Build
 import android.os.Bundle
@@ -116,14 +117,16 @@ class MainActivity : ComponentActivity() {
                 if (location != null) {
                     val lat = location.latitude
                     val lon = location.longitude
-                    val resolvedCityName = resolveCityName(lat, lon) ?: "目前位置"
-                    weatherViewModel.loadWeather(lat, lon, resolvedCityName)
+                    resolveCityName(lat, lon) { resolvedCityName ->
+                        weatherViewModel.loadWeather(lat, lon, resolvedCityName ?: "目前位置")
+                    }
                 } else {
                     // 若當前精確位置暫時為 null，嘗試使用最後已知位置
                     fusedLocationClient.lastLocation.addOnSuccessListener { lastLoc ->
                         if (lastLoc != null) {
-                            val resolvedCityName = resolveCityName(lastLoc.latitude, lastLoc.longitude) ?: "目前位置"
-                            weatherViewModel.loadWeather(lastLoc.latitude, lastLoc.longitude, resolvedCityName)
+                            resolveCityName(lastLoc.latitude, lastLoc.longitude) { resolvedCityName ->
+                                weatherViewModel.loadWeather(lastLoc.latitude, lastLoc.longitude, resolvedCityName ?: "目前位置")
+                            }
                         } else {
                             Toast.makeText(this, "無法獲取 GPS 座標，使用預設城市", Toast.LENGTH_SHORT).show()
                         }
@@ -138,22 +141,40 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 利用 Android Geocoder 將經緯度轉換為易讀的縣市區名稱
+     * 利用 Android Geocoder 將經緯度轉換為易讀的縣市區名稱。
+     * Android 13 (API 33) 起 Geocoder 提供非同步 GeocodeListener API 取代已棄用的同步方法，
+     * 因此依系統版本分流呼叫，並統一透過 callback 回傳結果。
      */
-    private fun resolveCityName(lat: Double, lon: Double): String? {
-        return try {
+    private fun resolveCityName(lat: Double, lon: Double, callback: (String?) -> Unit) {
+        try {
             val geocoder = Geocoder(this, Locale.TAIWAN)
-            val addresses = geocoder.getFromLocation(lat, lon, 1)
-            if (!addresses.isNullOrEmpty()) {
-                val addr = addresses[0]
-                val adminArea = addr.adminArea ?: ""
-                val locality = addr.locality ?: addr.subLocality ?: ""
-                if (adminArea.isNotEmpty() && locality.isNotEmpty() && adminArea != locality) {
-                    "$adminArea$locality"
-                } else adminArea.ifEmpty { locality.ifEmpty { addr.featureName } }
-            } else null
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                geocoder.getFromLocation(lat, lon, 1, object : Geocoder.GeocodeListener {
+                    override fun onGeocode(addresses: MutableList<Address>) {
+                        callback(extractCityName(addresses))
+                    }
+
+                    override fun onError(errorMessage: String?) {
+                        callback(null)
+                    }
+                })
+            } else {
+                @Suppress("DEPRECATION")
+                val addresses = geocoder.getFromLocation(lat, lon, 1)
+                callback(extractCityName(addresses))
+            }
         } catch (e: Exception) {
-            null
+            callback(null)
         }
+    }
+
+    private fun extractCityName(addresses: List<Address>?): String? {
+        if (addresses.isNullOrEmpty()) return null
+        val addr = addresses[0]
+        val adminArea = addr.adminArea ?: ""
+        val locality = addr.locality ?: addr.subLocality ?: ""
+        return if (adminArea.isNotEmpty() && locality.isNotEmpty() && adminArea != locality) {
+            "$adminArea$locality"
+        } else adminArea.ifEmpty { locality.ifEmpty { addr.featureName } }
     }
 }
