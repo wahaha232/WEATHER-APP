@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Android / Gradle local machine state (not portable across machines)
+local.properties
+.gradle/
