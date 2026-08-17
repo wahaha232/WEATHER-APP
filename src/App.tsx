@@ -568,6 +568,7 @@ export default function App() {
                 {/* 9. 過敏 (Allergens: 灰塵和皮屑, 樹木花粉, 青草花粉) */}
                 <AllergensCard
                   current={weatherData.current}
+                  airQuality={weatherData.airQuality}
                   settings={settings}
                 />
 

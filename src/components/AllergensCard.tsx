@@ -1,15 +1,17 @@
 import React from 'react';
-import { CurrentWeatherData, WeatherSettings } from '../types';
+import { AirQualityData, CurrentWeatherData, WeatherSettings } from '../types';
 import { calculatePollenAndAllergens } from '../services/weatherService';
 
 interface AllergensCardProps {
   current: CurrentWeatherData;
+  airQuality?: AirQualityData;
   settings: WeatherSettings;
   onOpenDetails?: () => void;
 }
 
 export const AllergensCard: React.FC<AllergensCardProps> = ({
   current,
+  airQuality,
   settings,
   onOpenDetails,
 }) => {
@@ -19,7 +21,7 @@ export const AllergensCard: React.FC<AllergensCardProps> = ({
     current.relativeHumidity,
     current.windSpeed,
     current.temperature,
-    50,
+    airQuality?.usAqi ?? 50,
     lang
   );
 

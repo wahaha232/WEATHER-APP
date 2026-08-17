@@ -87,7 +87,7 @@ export const WindPressureCard: React.FC<WindPressureCardProps> = ({
           </div>
 
           <span className="text-[10px] text-white/50 truncate">
-            {beaufort.descriptionZh}
+            {lang === 'zh' ? beaufort.descriptionZh : beaufort.descriptionEn}
           </span>
         </div>
 
